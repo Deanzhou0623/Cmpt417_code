@@ -28,7 +28,12 @@ class PrioritizedPlanningSolver(object):
 
         start_time = timer.time()
         result = []
-        constraints = []
+        # Task 1.5: Optimal constraints for collision-free paths with minimal cost
+        # Strategy: Agent 0 waits at (1,2) to let agent 1 pass and reach goal first
+        constraints = [
+            # Prevent agent 0 from being at (1,3) when agent 1 moves through
+            {'agent': 0, 'loc': [(1, 3)], 'timestep': 2}
+        ]
 
         for i in range(self.num_of_agents):  # Find path for each agent
             path = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
