@@ -1,0 +1,124 @@
+name: Claude Code Review (OAuth)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  # (no id-token needed because we'll pass github_token explicitly)
+
+jobs:
+  review:
+    # Repo secrets (your OAuth token) are NOT available to fork PRs.
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        # need both base & head to build a diff reliably
+        with: { fetch-depth: 0 }
+
+      # ---- sanity check: OAuth secret present ----
+      - name: Verify Claude OAuth secret
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || { echo "CLAUDE_CODE_OAUTH_TOKEN missing"; exit 1; }
+          echo "Token length OK: $(printf %s "$CLAUDE_CODE_OAUTH_TOKEN" | wc -c)"
+
+      # ---- 1) Post the normal review comment (same as before) ----
+      - name: Run Claude review (OAuth)
+        uses: anthropics/claude-code-action@beta
+        with:
+          github_token: ${{ github.token }}                     # bypasses OIDC
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            Please review this pull request and provide feedback on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Performance considerations
+            - Security concerns
+            - Test coverage
+            Be constructive and helpful in your feedback.
+
+      # ---- 2) Install CLI for the gate call ----
+      - name: Install Claude CLI
+        run: npm i -g @anthropic-ai/claude-code
+
+      # ---- 3) Build a compact diff for the gate (cap size) ----
+      - name: Build diff for gate
+        id: diff
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.sha }}"
+          git diff --unified=0 "$BASE...$HEAD" > full.diff || true
+          # cap to ~80k chars so the prompt stays small
+          awk 'BEGIN{max=80000} {s+=length($0)+1; if(s<=max) print}' full.diff > gate.diff
+          echo "path=gate.diff" >> "$GITHUB_OUTPUT"
+
+      # ---- 4) Ask Claude for a PASS/FAIL verdict in JSON ----
+      - name: Gate verdict from Claude (JSON)
+        id: gate
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+          cat > gate-prompt.txt <<'EOF'
+          You are a CI gate. Read the unified diff and respond with **only** this JSON (no prose, no code fences):
+          {"block": true|false, "severity_max":"CRITICAL|HIGH|MEDIUM|LOW", "reasons":[string,...]}
+
+          Set "block": true if ANY of these are present:
+          - SQL injection
+          - hardcoded credentials / secrets / API keys / passwords
+          - command injection / unsafe eval
+          - insecure deserialization / path traversal
+          - missing input validation on DB/auth routes
+          Otherwise set "block": false.
+
+          Here is the DIFF (may be truncated):
+          EOF
+          printf '```\n' >> gate-prompt.txt
+          cat "${{ steps.diff.outputs.path }}" >> gate-prompt.txt
+          printf '\n```\n' >> gate-prompt.txt
+
+          # call Claude with OAuth; use a cheaper model for gating
+          OUT=$(claude -p "$(cat gate-prompt.txt)" --model claude-3-5-haiku-latest --output-format json --verbose || true)
+          echo "$OUT" > gate.raw.jsonl
+
+          # extract the assistant text (should be pure JSON per instructions)
+          TEXT=$(jq -r 'select(.type=="assistant") | .content[]? | select(.type=="text") | .text' gate.raw.jsonl | tail -n1)
+          # save and show the verdict
+          echo "$TEXT" > verdict.json
+          jq . verdict.json
+
+          BLOCK=$(jq -r '.block // false' verdict.json)
+          echo "block=$BLOCK" >> "$GITHUB_OUTPUT"
+
+      # ---- 5) Fail the job if block=true (this is what BLOCKS the PR) ----
+      - name: Fail if block
+        if: steps.gate.outputs.block == 'true'
+        run: |
+          echo "❌ CRITICAL SECURITY ISSUES DETECTED - PR BLOCKED"
+          echo "========================================="
+          cat verdict.json | jq -r '.reasons[]' | while read -r reason; do
+            echo "  • $reason"
+          done
+          echo "========================================="
+          echo "Please fix the security issues identified above before merging."
+          exit 1
+
+      # (optional) keep the JSON around for debugging
+      - name: Upload gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-gate
+          path: |
+            gate.diff
+            gate-prompt.txt
+            gate.raw.jsonl
+            verdict.json
