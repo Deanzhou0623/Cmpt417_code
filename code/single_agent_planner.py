@@ -136,11 +136,23 @@ def a_star(my_map, start_loc, goal_loc, h_values, agent, constraints):
     earliest_goal_timestep = 0
     h_value = h_values[start_loc]
     constraint_table = build_constraint_table(constraints, agent)
+
+    # Task 2.4: Calculate maximum timestep (time horizon)
+    # Upper bound = number of cells in the map (max possible path length without constraints)
+    # Plus the maximum constraint timestep to allow waiting for constraints to pass
+    max_constraint_time = max(constraint_table.keys()) if constraint_table else 0
+    num_cells = len(my_map) * len(my_map[0])
+    max_timestep = num_cells + max_constraint_time
+
     root = {'loc': start_loc, 'g_val': 0, 'h_val': h_value, 'parent': None, 'timestep': 0}
     push_node(open_list, root)
     closed_list[(root['loc'], root['timestep'])] = root
     while len(open_list) > 0:
         curr = pop_node(open_list)
+
+        # Task 2.4: Check if we've exceeded the time horizon
+        if curr['timestep'] > max_timestep:
+            return None  # No solution within time horizon
         #############################
         # Task 1.4: Adjust the goal test condition to handle goal constraints
         if curr['loc'] == goal_loc:

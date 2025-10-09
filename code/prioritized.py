@@ -28,12 +28,7 @@ class PrioritizedPlanningSolver(object):
 
         start_time = timer.time()
         result = []
-        # Task 1.5: Optimal constraints for collision-free paths with minimal cost
-        # Strategy: Agent 0 waits at (1,2) to let agent 1 pass and reach goal first
-        constraints = [
-            # Prevent agent 0 from being at (1,3) when agent 1 moves through
-            {'agent': 0, 'loc': [(1, 3)], 'timestep': 2}
-        ]
+        constraints = []
 
         for i in range(self.num_of_agents):  # Find path for each agent
             path = a_star(self.my_map, self.starts[i], self.goals[i], self.heuristics[i],
@@ -49,6 +44,43 @@ class PrioritizedPlanningSolver(object):
             #            * self.num_of_agents has the number of total agents
             #            * constraints: array of constraints to consider for future A* searches
 
+            # Task 2.1: Add vertex constraints
+            # For each timestep in the current agent's path, add a vertex constraint
+            # for all future agents (agents with index > i)
+            for timestep in range(len(path)):
+                for future_agent in range(i + 1, self.num_of_agents):
+                    constraints.append({
+                        'agent': future_agent,
+                        'loc': [path[timestep]],
+                        'timestep': timestep
+                    })
+
+            # Task 2.2: Add edge constraints
+            # For each edge (move from one cell to another), add an edge constraint
+            # for all future agents to prevent them from taking the reverse edge
+            for timestep in range(len(path) - 1):
+                for future_agent in range(i + 1, self.num_of_agents):
+                    # Edge from path[timestep] to path[timestep+1]
+                    # Constrain reverse edge: path[timestep+1] to path[timestep] at timestep+1
+                    constraints.append({
+                        'agent': future_agent,
+                        'loc': [path[timestep + 1], path[timestep]],
+                        'timestep': timestep + 1
+                    })
+
+            # Task 2.3: Add goal constraints for all future timesteps
+            # Agent stays at goal forever, so constrain the goal location for all future timesteps
+            goal_loc = path[-1]
+            max_timestep = len(path) - 1
+            # Add constraints for a reasonable time horizon (e.g., sum of all path lengths)
+            # For now, use a large enough number to cover typical scenarios
+            for future_timestep in range(max_timestep, max_timestep + 100):
+                for future_agent in range(i + 1, self.num_of_agents):
+                    constraints.append({
+                        'agent': future_agent,
+                        'loc': [goal_loc],
+                        'timestep': future_timestep
+                    })
 
             ##############################
 
