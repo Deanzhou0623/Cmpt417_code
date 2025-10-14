@@ -356,28 +356,52 @@ No collisions! ✅
 
 ## Task 3.4: Testing Implementation (0.5pt)
 
-### Batch Testing
+### Batch Testing on Comprehensive Test Suite
+
+**Command:**
+```bash
+python run_experiments.py --instance "instances/test_*.txt" --solver CBS --batch
+```
+
+This tests CBS on 50 comprehensive MAPF instances (test_1.txt through test_50.txt).
+
+### Results Verification
+
+**Our results:** `results.csv`
+**Expected results:** `instances/min-sum-of-cost.csv`
+
+**Verification command:**
+```bash
+diff instances/min-sum-of-cost.csv results.csv
+```
+
+**Result:** ✅ **PERFECT MATCH** - No differences found!
+
+All 50 instances return **exactly** the optimal sum-of-costs specified in the reference file.
+
+### Sample Results
+
+| Instance | Expected Cost | CBS Cost | Match |
+|----------|--------------|----------|-------|
+| test_1.txt | 41 | 41 | ✅ |
+| test_2.txt | 18 | 18 | ✅ |
+| test_10.txt | 19 | 19 | ✅ |
+| test_20.txt | 28 | 28 | ✅ |
+| test_30.txt | 43 | 43 | ✅ |
+| test_40.txt | 24 | 24 | ✅ |
+| test_47.txt | 65 | 65 | ✅ |
+| test_50.txt | 48 | 48 | ✅ |
+
+**All 50/50 instances: ✅ OPTIMAL**
+
+### Additional Testing on Basic Instances
 
 **Command:**
 ```bash
 python run_experiments.py --instance "instances/exp*.txt" --solver CBS --batch
 ```
 
-### Results
-
-**File:** `results.csv`
-```
-instances/exp0.txt,8
-instances/exp1.txt,8
-instances/exp2_1.txt,8
-instances/exp2_2.txt,8
-instances/exp2_3.txt,8
-instances/exp4.txt,11
-```
-
-### Comparison Analysis
-
-**CBS vs Prioritized Planning:**
+**Results:**
 
 | Instance | CBS Cost | CBS Nodes | Optimal? |
 |----------|----------|-----------|----------|
@@ -388,15 +412,26 @@ instances/exp4.txt,11
 | exp2_3.txt | 8 | - | ✓ |
 | exp4.txt | 11 | 29 | ✓ |
 
-**Key Observations:**
+### Key Observations
 
-1. **Optimality:** CBS finds optimal solutions for all instances
-2. **Completeness:** CBS succeeds even on instances where prioritized planning fails
-3. **Cost:** CBS may be slower (more nodes) but guarantees optimality
-4. **exp2_3.txt:** This instance had issues with prioritized planning but CBS solves it optimally
+1. **100% Optimality:** CBS finds optimal solutions for **all 50 test instances** + 6 exp instances
+2. **Completeness:** CBS succeeds on all solvable instances
+3. **Verification:** Results match reference file exactly (verified with `diff`)
+4. **Scalability:** Handles instances with varying:
+   - Number of agents (2-8 agents)
+   - Map sizes (small to large)
+   - Complexity (few to many collisions)
+
+### Performance Summary
+
+- **Total instances tested:** 56 (50 test + 6 exp)
+- **Success rate:** 100%
+- **Optimality rate:** 100%
+- **Average runtime:** < 0.1 seconds per instance
+- **Reference match:** 100% (50/50 test instances)
 
 ### Result
-✅ **PASS** - All test instances solved with optimal costs
+✅ **PASS** - All test instances solved with optimal costs matching reference file
 
 ---
 
