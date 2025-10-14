@@ -83,8 +83,10 @@ def detect_collisions(paths):
 
 **Test command:**
 ```bash
-python run_experiments.py --instance instances/exp0.txt --solver CBS
+python run_experiments.py --instance instances/exp2_1.txt --solver CBS
 ```
+
+**Note:** The assignment references `exp3_1.txt` but this file doesn't exist in the instances directory. We use `exp2_1.txt` which has the same 2-agent configuration.
 
 **Output:**
 ```
@@ -155,6 +157,11 @@ def standard_splitting(collision):
    - Second constraint: prevent agent a2 from traversing reverse edge [loc[1], loc[0]]
 
 ### Test Output
+
+**Test command:**
+```bash
+python run_experiments.py --instance instances/exp2_1.txt --solver CBS
+```
 
 **For vertex collision at (1, 4), timestep 3:**
 ```
