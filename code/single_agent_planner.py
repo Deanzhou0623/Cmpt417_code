@@ -88,19 +88,42 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     # Task 1.2/1.3: Check if a move from curr_loc to next_loc at time step next_time violates
     #               any given constraint. For efficiency the constraints are indexed in a constraint_table
     #               by time step, see build_constraint_table.
+    # Task 4.1: Extended to handle both positive and negative constraints
 
     if next_time not in constraint_table:
         return False
 
+    # First check for positive constraints - they override everything at this timestep
     for constraint in constraint_table[next_time]:
-        # Check vertex constraint (single location in list)
-        if len(constraint['loc']) == 1:
-            if constraint['loc'][0] == next_loc:
-                return True
-        # Check edge constraint (two locations in list)
-        elif len(constraint['loc']) == 2:
-            if constraint['loc'][0] == curr_loc and constraint['loc'][1] == next_loc:
-                return True
+        is_positive = constraint.get('positive', False)
+        if is_positive:
+            # Check vertex constraint (single location in list)
+            if len(constraint['loc']) == 1:
+                # Positive vertex constraint: agent MUST be at this location at this timestep
+                # This means ANY move that does NOT result in being at this location is forbidden
+                if constraint['loc'][0] != next_loc:
+                    return True  # Must be at required location, can't be anywhere else
+            # Check edge constraint (two locations in list)
+            elif len(constraint['loc']) == 2:
+                # Positive edge constraint: agent MUST traverse this edge at this timestep
+                # This means ANY move that is NOT this specific edge is forbidden
+                if not (constraint['loc'][0] == curr_loc and constraint['loc'][1] == next_loc):
+                    return True  # Must traverse required edge, can't do anything else
+
+    # If no positive constraints at this timestep, check negative constraints
+    for constraint in constraint_table[next_time]:
+        is_positive = constraint.get('positive', False)
+        if not is_positive:
+            # Check vertex constraint (single location in list)
+            if len(constraint['loc']) == 1:
+                # Negative vertex constraint: agent must NOT be at this location
+                if constraint['loc'][0] == next_loc:
+                    return True
+            # Check edge constraint (two locations in list)
+            elif len(constraint['loc']) == 2:
+                # Negative edge constraint: agent must NOT traverse this edge
+                if constraint['loc'][0] == curr_loc and constraint['loc'][1] == next_loc:
+                    return True
 
     return False
 
