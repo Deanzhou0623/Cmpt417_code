@@ -95,9 +95,31 @@ def standard_splitting(collision):
     return constraints
 
 
+def paths_violate_constraint(constraint, paths):
+    """
+    Helper function to find which agents violate a positive constraint.
+    Returns a list of agent IDs that violate the given positive constraint.
+    """
+    assert constraint['positive'] is True
+    rst = []
+    for i in range(len(paths)):
+        if i == constraint['agent']:
+            continue
+        curr = get_location(paths[i], constraint['timestep'])
+        prev = get_location(paths[i], constraint['timestep'] - 1)
+        if len(constraint['loc']) == 1:  # vertex constraint
+            if constraint['loc'][0] == curr:
+                rst.append(i)
+        else:  # edge constraint
+            if constraint['loc'][0] == prev or constraint['loc'][1] == curr \
+                    or constraint['loc'] == [curr, prev]:
+                rst.append(i)
+    return rst
+
+
 def disjoint_splitting(collision):
     ##############################
-    # Task 4.1: Return a list of (two) constraints to resolve the given collision
+    # Task 4.2: Return a list of (two) constraints to resolve the given collision
     #           Vertex collision: the first constraint enforces one agent to be at the specified location at the
     #                            specified timestep, and the second constraint prevents the same agent to be at the
     #                            same location at the timestep.
@@ -106,7 +128,68 @@ def disjoint_splitting(collision):
     #                          specified edge at the specified timestep
     #           Choose the agent randomly
 
-    pass
+    constraints = []
+
+    # Randomly choose which agent gets the positive constraint
+    chosen_agent = random.randint(0, 1)
+
+    if chosen_agent == 0:
+        positive_agent = collision['a1']
+        negative_agent = collision['a2']
+    else:
+        positive_agent = collision['a2']
+        negative_agent = collision['a1']
+
+    if len(collision['loc']) == 1:
+        # Vertex collision
+        # Positive constraint: chosen agent MUST be at this location
+        constraints.append({
+            'agent': positive_agent,
+            'loc': collision['loc'],
+            'timestep': collision['timestep'],
+            'positive': True
+        })
+        # Negative constraint: other agent must NOT be at this location
+        constraints.append({
+            'agent': negative_agent,
+            'loc': collision['loc'],
+            'timestep': collision['timestep'],
+            'positive': False
+        })
+    else:
+        # Edge collision - loc contains [from, to]
+        if positive_agent == collision['a1']:
+            # Positive constraint: a1 MUST traverse edge [loc[0], loc[1]]
+            constraints.append({
+                'agent': positive_agent,
+                'loc': collision['loc'],
+                'timestep': collision['timestep'],
+                'positive': True
+            })
+            # Negative constraint: a2 must NOT traverse reverse edge [loc[1], loc[0]]
+            constraints.append({
+                'agent': negative_agent,
+                'loc': [collision['loc'][1], collision['loc'][0]],
+                'timestep': collision['timestep'],
+                'positive': False
+            })
+        else:
+            # Positive constraint: a2 MUST traverse reverse edge [loc[1], loc[0]]
+            constraints.append({
+                'agent': positive_agent,
+                'loc': [collision['loc'][1], collision['loc'][0]],
+                'timestep': collision['timestep'],
+                'positive': True
+            })
+            # Negative constraint: a1 must NOT traverse edge [loc[0], loc[1]]
+            constraints.append({
+                'agent': negative_agent,
+                'loc': collision['loc'],
+                'timestep': collision['timestep'],
+                'positive': False
+            })
+
+    return constraints
 
 
 class CBSSolver(object):
@@ -200,7 +283,12 @@ class CBSSolver(object):
 
             # 3. Otherwise, choose the first collision and convert to constraints
             collision = P['collisions'][0]
-            constraints = standard_splitting(collision)
+
+            # Task 4.3: Use disjoint splitting if enabled, otherwise standard splitting
+            if disjoint:
+                constraints = disjoint_splitting(collision)
+            else:
+                constraints = standard_splitting(collision)
 
             # For each constraint, create a new child node
             for constraint in constraints:
@@ -223,6 +311,51 @@ class CBSSolver(object):
                     # Update the path for this agent
                     Q['paths'] = Q['paths'][:]  # make a proper copy
                     Q['paths'][agent] = path
+
+                    # Task 4.3: For positive constraints, we need to replan paths for agents
+                    # that violate the positive constraint (since positive constraints
+                    # implicitly add negative constraints for other agents)
+                    if constraint.get('positive', False):
+                        # Find agents that violate this positive constraint
+                        violating_agents = paths_violate_constraint(constraint, Q['paths'])
+
+                        # Add implicit negative constraints for violating agents
+                        # A positive constraint for agent A to be at location X at time T
+                        # implicitly creates negative constraints for all other agents
+                        for violating_agent in violating_agents:
+                            if len(constraint['loc']) == 1:
+                                # Vertex constraint: other agents can't be at this location
+                                Q['constraints'].append({
+                                    'agent': violating_agent,
+                                    'loc': constraint['loc'],
+                                    'timestep': constraint['timestep'],
+                                    'positive': False
+                                })
+                            else:
+                                # Edge constraint: other agents can't use this edge
+                                Q['constraints'].append({
+                                    'agent': violating_agent,
+                                    'loc': constraint['loc'],
+                                    'timestep': constraint['timestep'],
+                                    'positive': False
+                                })
+
+                        # Replan paths for all violating agents with the new constraints
+                        all_paths_found = True
+                        for violating_agent in violating_agents:
+                            new_path = a_star(self.my_map, self.starts[violating_agent],
+                                            self.goals[violating_agent],
+                                            self.heuristics[violating_agent],
+                                            violating_agent, Q['constraints'])
+                            if new_path is None:
+                                # Cannot find path for this agent, skip this child node
+                                all_paths_found = False
+                                break
+                            Q['paths'][violating_agent] = new_path
+
+                        # Skip this child if any agent couldn't find a path
+                        if not all_paths_found:
+                            continue
 
                     # Detect collisions in the new paths
                     Q['collisions'] = detect_collisions(Q['paths'])
