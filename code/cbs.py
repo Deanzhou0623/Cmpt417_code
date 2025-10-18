@@ -70,12 +70,14 @@ def standard_splitting(collision):
         constraints.append({
             'agent': collision['a1'],
             'loc': collision['loc'],
-            'timestep': collision['timestep']
+            'timestep': collision['timestep'],
+            'positive': False
         })
         constraints.append({
             'agent': collision['a2'],
             'loc': collision['loc'],
-            'timestep': collision['timestep']
+            'timestep': collision['timestep'],
+            'positive': False
         })
     else:
         # Edge collision - loc contains [from, to]
@@ -83,13 +85,15 @@ def standard_splitting(collision):
         constraints.append({
             'agent': collision['a1'],
             'loc': collision['loc'],
-            'timestep': collision['timestep']
+            'timestep': collision['timestep'],
+            'positive': False
         })
         # Constraint for agent 2: prevent moving from loc[1] to loc[0] (reversed edge)
         constraints.append({
             'agent': collision['a2'],
             'loc': [collision['loc'][1], collision['loc'][0]],
-            'timestep': collision['timestep']
+            'timestep': collision['timestep'],
+            'positive': False
         })
 
     return constraints
@@ -131,63 +135,36 @@ def disjoint_splitting(collision):
     constraints = []
 
     # Randomly choose which agent gets the positive constraint
-    chosen_agent = random.randint(0, 1)
-
-    if chosen_agent == 0:
-        positive_agent = collision['a1']
-        negative_agent = collision['a2']
+    chosen_index = random.randint(0, 1)
+    if chosen_index == 0:
+        chosen_agent = collision['a1']
+        edge = collision['loc']
     else:
-        positive_agent = collision['a2']
-        negative_agent = collision['a1']
-
-    if len(collision['loc']) == 1:
-        # Vertex collision
-        # Positive constraint: chosen agent MUST be at this location
-        constraints.append({
-            'agent': positive_agent,
-            'loc': collision['loc'],
-            'timestep': collision['timestep'],
-            'positive': True
-        })
-        # Negative constraint: other agent must NOT be at this location
-        constraints.append({
-            'agent': negative_agent,
-            'loc': collision['loc'],
-            'timestep': collision['timestep'],
-            'positive': False
-        })
-    else:
-        # Edge collision - loc contains [from, to]
-        if positive_agent == collision['a1']:
-            # Positive constraint: a1 MUST traverse edge [loc[0], loc[1]]
-            constraints.append({
-                'agent': positive_agent,
-                'loc': collision['loc'],
-                'timestep': collision['timestep'],
-                'positive': True
-            })
-            # Negative constraint: a2 must NOT traverse reverse edge [loc[1], loc[0]]
-            constraints.append({
-                'agent': negative_agent,
-                'loc': [collision['loc'][1], collision['loc'][0]],
-                'timestep': collision['timestep'],
-                'positive': False
-            })
+        chosen_agent = collision['a2']
+        if len(collision['loc']) == 1:
+            edge = collision['loc']
         else:
-            # Positive constraint: a2 MUST traverse reverse edge [loc[1], loc[0]]
-            constraints.append({
-                'agent': positive_agent,
-                'loc': [collision['loc'][1], collision['loc'][0]],
-                'timestep': collision['timestep'],
-                'positive': True
-            })
-            # Negative constraint: a1 must NOT traverse edge [loc[0], loc[1]]
-            constraints.append({
-                'agent': negative_agent,
-                'loc': collision['loc'],
-                'timestep': collision['timestep'],
-                'positive': False
-            })
+            edge = [collision['loc'][1], collision['loc'][0]]
+
+    timestep = collision['timestep']
+
+    loc_negative = list(edge)
+    loc_positive = list(edge)
+
+    # First constraint: chosen agent must avoid the colliding action (negative)
+    constraints.append({
+        'agent': chosen_agent,
+        'loc': loc_negative,
+        'timestep': timestep,
+        'positive': False
+    })
+    # Second constraint: chosen agent must perform the colliding action (positive)
+    constraints.append({
+        'agent': chosen_agent,
+        'loc': loc_positive,
+        'timestep': timestep,
+        'positive': True
+    })
 
     return constraints
 
@@ -319,43 +296,62 @@ class CBSSolver(object):
                         # Find agents that violate this positive constraint
                         violating_agents = paths_violate_constraint(constraint, Q['paths'])
 
-                        # Add implicit negative constraints for violating agents
-                        # A positive constraint for agent A to be at location X at time T
-                        # implicitly creates negative constraints for all other agents
-                        for violating_agent in violating_agents:
-                            if len(constraint['loc']) == 1:
-                                # Vertex constraint: other agents can't be at this location
-                                Q['constraints'].append({
-                                    'agent': violating_agent,
-                                    'loc': constraint['loc'],
-                                    'timestep': constraint['timestep'],
-                                    'positive': False
-                                })
-                            else:
-                                # Edge constraint: other agents can't use this edge
-                                Q['constraints'].append({
-                                    'agent': violating_agent,
-                                    'loc': constraint['loc'],
-                                    'timestep': constraint['timestep'],
-                                    'positive': False
-                                })
+                        if violating_agents:
+                            # Add implicit negative constraints that arise from the positive one
+                            derived_constraints = []
+                            for violating_agent in violating_agents:
+                                if len(constraint['loc']) == 1:
+                                    # Vertex positive constraint => others must avoid this vertex at timestep
+                                    derived_constraints.append({
+                                        'agent': violating_agent,
+                                        'loc': list(constraint['loc']),
+                                        'timestep': constraint['timestep'],
+                                        'positive': False
+                                    })
+                                else:
+                                    from_loc, to_loc = constraint['loc']
+                                    # Avoid being at the target vertex at this timestep
+                                    derived_constraints.append({
+                                        'agent': violating_agent,
+                                        'loc': [to_loc],
+                                        'timestep': constraint['timestep'],
+                                        'positive': False
+                                    })
+                                    # Avoid being at the source vertex at the previous timestep
+                                    if constraint['timestep'] > 0:
+                                        derived_constraints.append({
+                                            'agent': violating_agent,
+                                            'loc': [from_loc],
+                                            'timestep': constraint['timestep'] - 1,
+                                            'positive': False
+                                        })
+                                    # Avoid traversing the conflicting edge in the opposite direction
+                                    derived_constraints.append({
+                                        'agent': violating_agent,
+                                        'loc': [to_loc, from_loc],
+                                        'timestep': constraint['timestep'],
+                                        'positive': False
+                                    })
 
-                        # Replan paths for all violating agents with the new constraints
-                        all_paths_found = True
-                        for violating_agent in violating_agents:
-                            new_path = a_star(self.my_map, self.starts[violating_agent],
-                                            self.goals[violating_agent],
-                                            self.heuristics[violating_agent],
-                                            violating_agent, Q['constraints'])
-                            if new_path is None:
-                                # Cannot find path for this agent, skip this child node
-                                all_paths_found = False
-                                break
-                            Q['paths'][violating_agent] = new_path
+                            if derived_constraints:
+                                Q['constraints'].extend(derived_constraints)
 
-                        # Skip this child if any agent couldn't find a path
-                        if not all_paths_found:
-                            continue
+                            # Replan paths for all violating agents with the new constraints
+                            all_paths_found = True
+                            for violating_agent in violating_agents:
+                                new_path = a_star(self.my_map, self.starts[violating_agent],
+                                                  self.goals[violating_agent],
+                                                  self.heuristics[violating_agent],
+                                                  violating_agent, Q['constraints'])
+                                if new_path is None:
+                                    # Cannot find path for this agent, skip this child node
+                                    all_paths_found = False
+                                    break
+                                Q['paths'][violating_agent] = new_path
+
+                            # Skip this child if any agent couldn't find a path
+                            if not all_paths_found:
+                                continue
 
                     # Detect collisions in the new paths
                     Q['collisions'] = detect_collisions(Q['paths'])

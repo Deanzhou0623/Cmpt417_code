@@ -5,8 +5,12 @@ from pathlib import Path
 from cbs import CBSSolver
 from independent import IndependentSolver
 from prioritized import PrioritizedPlanningSolver
-from visualize import Animation
 from single_agent_planner import get_sum_of_cost
+
+try:
+    from visualize import Animation
+except ModuleNotFoundError:
+    Animation = None
 
 SOLVER = "CBS"
 
@@ -111,6 +115,8 @@ if __name__ == '__main__':
 
 
         if not args.batch:
+            if Animation is None:
+                raise ModuleNotFoundError("Animation support requires matplotlib (install to enable visualization).")
             print("***Test paths on a simulation***")
             animation = Animation(my_map, starts, goals, paths)
             # animation.save("output.mp4", 1.0)
