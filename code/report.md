@@ -1,9 +1,8 @@
 # CMPT 417: Multi-Agent Path Finding (MAPF) - Individual Project Report
 
-**Student:** [Your Name]
-**Student Number:** [Your SFU Student Number]
+**Student:** Dingsong Zhou
+**Student Number:** 301571125
 **Course:** CMPT 417 - Intelligent Systems
-**Date:** October 23, 2025
 
 ---
 
@@ -14,16 +13,12 @@
 3. [Task 3: Implementing Conflict-Based Search (CBS)](#task-3-implementing-conflict-based-search-cbs)
 4. [Task 4: CBS with Disjoint Splitting](#task-4-cbs-with-disjoint-splitting)
 5. [Task 5: Benchmarking MAPF Solvers (Bonus)](#task-5-benchmarking-mapf-solvers-bonus)
-6. [Custom Test Instances](#custom-test-instances)
-7. [References](#references)
 
 ---
 
 ## Task 1: Implementing Space-Time A*
 
-**Total Points:** 5/5
-
-### Task 1.1: Searching in the Space-Time Domain (1pt)
+### Task 1.1: Searching in the Space-Time Domain 
 
 #### Implementation Decision
 Modified the A* search algorithm in `single_agent_planner.py` to operate in the space-time domain rather than just the spatial domain.
@@ -42,12 +37,13 @@ Modified the A* search algorithm in `single_agent_planner.py` to operate in the 
    ```
 
 2. **Modified closed list indexing (line 171):**
+   
    ```python
    # OLD: closed_list[child_loc] = child
    # NEW: Index by both location AND timestep
    closed_list[(child_loc, curr['timestep'] + 1)] = child
    ```
-
+   
 3. **Implemented wait action (lines 173-187):**
    ```python
    # Allow agent to wait in current cell
@@ -64,14 +60,30 @@ Modified the A* search algorithm in `single_agent_planner.py` to operate in the 
 
 **Test Output:**
 ```
-python run_experiments.py --instance instances/exp1.txt --solver Independent
-Sum of costs: 6
-```
-✅ **PASS**
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
 
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Independent***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    6
+***Test paths on a simulation***
+```
 ---
 
-### Task 1.2: Handling Vertex Constraints (1pt)
+### Task 1.2: Handling Vertex Constraints 
 
 #### Implementation Decision
 Created a constraint table data structure for efficient constraint lookup and checking.
@@ -109,6 +121,44 @@ def is_constrained(curr_loc, next_loc, next_time, constraint_table):
     return False
 ```
 
+**Test Output:**
+
+```python
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    7
+[[(1, 1), (1, 2), (1, 3), (1, 4), (1, 4), (1, 5)], [(1, 2), (1, 3), (1, 4)]]
+```
+
+##### Analysis
+
+**Agent 0 path:** `[(1, 1), (1, 2), (1, 3), (1, 4), (1, 4), (1, 5)]`
+
+Timeline:
+
+- t=0: (1,1)
+- t=1: (1,2)
+- t=2: (1,3)
+- t=3: (1,4)
+- **t=4: (1,4)** ← **Waits here (constraint prevents (1,5))**
+- t=5: (1,5) ← Reaches goal
+
 **Question: Where is agent 0 at time step 4?**
 
 **Answer:** Agent 0 is at location **(1, 4)** at timestep 4.
@@ -117,11 +167,9 @@ The constraint `{'agent': 0, 'loc': [(1, 5)], 'timestep': 4}` prevents agent 0 f
 
 **Path:** `[(1, 1), (1, 2), (1, 3), (1, 4), (1, 4), (1, 5)]`
 
-✅ **PASS**
-
 ---
 
-### Task 1.3: Adding Edge Constraints (1pt)
+### Task 1.3: Adding Edge Constraints 
 
 #### Implementation Decision
 Extended the `is_constrained` function to detect edge collisions (agents swapping positions).
@@ -137,20 +185,55 @@ elif len(constraint['loc']) == 2:
 **Rationale:** Edge constraints represent forbidden transitions between cells. By checking both `curr_loc` and `next_loc`, we prevent agents from traversing specific edges at specific times.
 
 **Test Constraint:**
+
 ```python
 {'agent': 1, 'loc': [(1, 2), (1, 3)], 'timestep': 1}
 ```
 This prohibits agent 1 from moving from (1, 2) to (1, 3) at timestep 1.
 
+**Test Output:**
+
+```python
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    7
+[[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)], [(1, 2), (1, 2), (1, 3), (1, 4)]]
+```
+
+##### Analysis
+
+**Agent 1 path:** `[(1, 2), (1, 2), (1, 3), (1, 4)]`
+
+Timeline:
+
+- t=0: (1,2) - Start location
+- **t=1: (1,2)** ← **Waits (edge constraint prevents move to (1,3))**
+- t=2: (1,3) - Now allowed to move
+- t=3: (1,4) - Reaches goal 
+
 **Result:** Agent 1 waits at (1, 2) at timestep 1, then moves to (1, 3) at timestep 2.
 
 **Path:** `[(1, 2), (1, 2), (1, 3), (1, 4)]`
 
-✅ **PASS**
-
 ---
 
-### Task 1.4: Handling Goal Constraints (1pt)
+### Task 1.4: Handling Goal Constraints 
 
 #### Implementation Decision
 Modified the goal test to check for future constraints at the goal location before accepting it as the final state.
@@ -171,25 +254,55 @@ if curr['loc'] == goal_loc:
 
 **Rationale:** Since agents stay at their goal location indefinitely, we must verify that no future constraints will be violated. If a future constraint exists, the agent must either reach the goal later or temporarily leave it.
 
+**Test Output:**
+
+```python
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    13
+[[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 5), (1, 4), (1, 5)],
+ [(1, 2), (1, 3), (1, 4)]]
+```
+
+##### Analysis
+
+**Agent 0 path:** `[(1,1), (1,2), (1,3), (1,4), (1,5), (1,5), (1,5), (1,5), (1,5), (1,5), (1,4), (1,5)]`
+
+Timeline:
+
+- t=0: (1,1)
+- t=1: (1,2)
+- t=2: (1,3)
+- t=3: (1,4)
+- t=4-9: (1,5) - At goal location
+- **t=10: (1,4)** ← **NOT at goal (1,5) - Constraint satisfied!**
+- t=11: (1,5) - Returns to goal
+
 **Question: Where is agent 0 at time step 10?**
 
 **Answer:** Agent 0 is at location **(1, 4)** at timestep 10, **NOT at the goal location (1, 5)**.
 
-The constraint `{'agent': 0, 'loc': [(1, 5)], 'timestep': 10}` forces the agent to leave the goal temporarily.
-
-**Timeline:**
-- t=0-3: Agent moves to goal
-- t=4-9: Agent stays at goal (1, 5)
-- **t=10: Agent at (1, 4)** ← Avoiding constraint
-- t=11: Agent returns to goal (1, 5)
-
-**Path:** `[(1,1), (1,2), (1,3), (1,4), (1,5), (1,5), (1,5), (1,5), (1,5), (1,5), (1,4), (1,5)]`
-
-✅ **PASS**
+The agent reaches the goal at timestep 4, but the modified goal test detects the constraint at timestep 10. The agent stays at the goal from t=4 to t=9, then moves back to (1, 4) at t=10 to avoid the constraint, and finally returns to the goal at t=11.
 
 ---
 
-### Task 1.5: Designing Constraints (1pt)
+### Task 1.5: Designing Constraints 
 
 #### Implementation Decision
 Designed a minimal constraint set to achieve collision-free paths for two agents sharing a corridor.
@@ -205,12 +318,41 @@ Designed a minimal constraint set to achieve collision-free paths for two agents
 ```
 
 **Rationale:**
+
 1. Agent 1 needs to pass through (1,3) at timestep 1
 2. By preventing agent 0 from occupying (1,3) at timestep 2, we force agent 0 to wait
 3. This creates temporal separation, allowing agent 1 to reach its goal first
 4. Agent 0 can then proceed without collision
 
+##### Test Output
+
+```python
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    7
+[[(1, 1), (1, 2), (1, 2), (1, 3), (1, 4), (1, 5)], [(1, 2), (1, 3), (1, 4)]]
+```
+
+**Rationale:**
+
 **Solution Paths:**
+
 - **Agent 0:** `[(1,1), (1,2), (1,2), (1,3), (1,4), (1,5)]` - Cost: 5
 - **Agent 1:** `[(1,2), (1,3), (1,4)]` - Cost: 2
 - **Sum of costs: 7**
@@ -228,15 +370,11 @@ Designed a minimal constraint set to achieve collision-free paths for two agents
 
 **Note:** At t=4, both agents occupy (1,4), but agent 1 is stationary at its goal. This minimal collision is unavoidable given the map layout where agent 0 must pass through agent 1's goal location.
 
-✅ **PASS**
-
 ---
 
 ## Task 2: Prioritized Planning
 
-**Total Points:** 5.5/5 (including bonus)
-
-### Task 2.1: Adding Vertex Constraints (1pt)
+### Task 2.1: Adding Vertex Constraints 
 
 #### Implementation Decision
 Generate vertex constraints from each planned path to prevent future agents from colliding.
@@ -260,18 +398,35 @@ for timestep in range(len(path)):
 
 **Test Output:**
 ```
-Agent 0 path: [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)]
-Agent 1 path: [(1, 2), (1, 3), (1, 4), (1, 3), (1, 4)]
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    8
+[[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)], [(1, 2), (1, 3), (1, 4), (1, 3), (1, 4)]]
+***Test paths on a simulation***
 COLLISION! (agent-agent) (0, 1) at time 3.2
 ```
 
 **Observation:** Agent 1 moves back and forth between (1,3) and (1,4) because it cannot stay at (1,4) when agent 0 will be there. Edge collision still occurs (addressed in 2.2).
 
-✅ **PASS**
-
 ---
 
-### Task 2.2: Adding Edge Constraints (1pt)
+### Task 2.2: Adding Edge Constraints 
 
 #### Implementation Decision
 Generate edge constraints to prevent agents from swapping positions.
@@ -296,17 +451,46 @@ for timestep in range(len(path) - 1):
 
 **Test Output:**
 ```
-Agent 0 path: [(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)]
-Agent 1 path: [(1, 2), (1, 3), (2, 3), (1, 3), (1, 4)]
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 0 1 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 1 0 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    8
+[[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)], [(1, 2), (1, 3), (2, 3), (1, 3), (1, 4)]]
+***Test paths on a simulation***
 ```
 
-**Analysis:** Agent 1 detours to (2, 3) at timestep 2 to avoid edge collision. No collisions detected!
+**Analysis:** 
 
-✅ **PASS**
+**Agent 0 path:** `[(1, 1), (1, 2), (1, 3), (1, 4), (1, 5)]` **Agent 1 path:** `[(1, 2), (1, 3), (2, 3), (1, 3), (1, 4)]`
+
+| Timestep | Agent 0 | Agent 1 | Collision? |
+| -------- | ------- | ------- | ---------- |
+| t=0      | (1,1)   | (1,2)   | No         |
+| t=1      | (1,2)   | (1,3)   | No         |
+| t=2      | (1,3)   | (2,3)   | No         |
+| t=3      | (1,4)   | (1,3)   | No         |
+| t=4      | (1,5)   | (1,4)   | No         |
+
+Agent 1 detours to (2, 3) at timestep 2 to avoid edge collision. No collisions detected!
 
 ---
 
-### Task 2.3: Adding Additional Constraints (1pt)
+### Task 2.3: Adding Additional Constraints
 
 #### Implementation Decision
 Add goal constraints for all future timesteps since agents stay at goals indefinitely.
@@ -340,11 +524,9 @@ Sum of costs: 8
 
 **Analysis:** Agent 1 routes through row 2 (cells (2,3), (2,4), (2,5)) to avoid agent 0's goal at (1, 4). No collisions!
 
-✅ **PASS**
-
 ---
 
-### Task 2.4: Addressing Failures (1pt)
+### Task 2.4: Addressing Failures 
 
 #### Implementation Decision
 Implement a time horizon to ensure termination and prevent infinite search.
@@ -369,9 +551,38 @@ while len(open_list) > 0:
 ```
 
 **Rationale:**
+
 - `num_cells`: Upper bound on shortest path length
 - `max_constraint_time`: Latest constraint that might require waiting
 - Combined: Reasonable upper bound on solution length
+
+**Output**
+
+```
+***Import an instance***
+Start locations
+@ @ @ @ @ @ @
+@ 1 0 . . . @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+Goal locations
+@ @ @ @ @ @ @
+@ . . . 0 1 @
+@ @ @ . @ @ @
+@ @ @ @ @ @ @
+
+***Run Prioritized***
+
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    105
+[[(1, 2), (1, 3), (1, 4)],
+ [(1, 1), (1, 2), (1, 3), (1, 3), ...(97 times at 1,3)..., (1, 3), (1, 4), (1, 5)]]
+```
+
+**Analysis:**
 
 **Question: Did the solver report "no solutions"?**
 
@@ -381,11 +592,9 @@ Agent 1 waits at (1, 3) for approximately 100 timesteps until the goal constrain
 
 **Explanation:** The time horizon (`num_cells + max_constraint_time`) allows enough time for agent 1 to wait out the 100-timestep goal constraint. While this demonstrates proper termination (no infinite loop), it produces an impractical solution.
 
-✅ **PASS** - Solver terminates properly with time horizon enforcement
-
 ---
 
-### Task 2.5: Showing that Prioritized Planning is Incomplete and Suboptimal (1pt + 0.5pt bonus)
+### Task 2.5: Showing that Prioritized Planning is Incomplete and Suboptimal 
 
 #### Implementation Decision
 Designed test instances that demonstrate incompleteness and ordering-dependency in prioritized planning.
@@ -412,11 +621,13 @@ Designed test instances that demonstrate incompleteness and ordering-dependency 
 **Agent Priority:** 0 > 1 > 2 (agents planned in order 0, 1, 2)
 
 **Test Command:**
+
 ```bash
 python run_experiments.py --instance custominstances/task2_5a.txt --solver Prioritized
 ```
 
 **Output:**
+
 ```
 BaseException: No solutions
 ```
@@ -445,15 +656,16 @@ With the reversed ordering in `task2_5b.txt` (planning 2>1>0 effectively):
 - Other agents can coordinate around this primary movement
 - Solution found with cost 309
 
-This demonstrates **incompleteness** - prioritized planning fails for certain orderings even when solutions exist.
+This demonstrates incompleteness - prioritized planning fails for certain orderings even when solutions exist.
 
 ---
 
-#### Bonus: Ordering-Dependent Incompleteness (0.5pt)
+#### Bonus: Ordering-Dependent Incompleteness 
 
-To earn the bonus 0.5pt, I created an instance where **the same problem fails with one ordering but succeeds with another ordering**.
+I created an instance where the same problem fails with one ordering but succeeds with another ordering.
 
 **Instance Files:**
+
 - `custominstances/task2_5a.txt` - Fails with ordering 0>1>2
 - `custominstances/task2_5b.txt` - Succeeds (reversed agent ordering)
 
@@ -492,7 +704,7 @@ BaseException: No solutions
 
 **Instance 2.5b Configuration (SUCCEEDS - Reversed):**
 
-Same map, same start/goal locations, but **reversed agent ordering**.
+Same map, same start/goal locations, but reversed agent ordering.
 
 **Test Command:**
 ```bash
@@ -500,6 +712,7 @@ python run_experiments.py --instance custominstances/task2_5b.txt --solver Prior
 ```
 
 **Output:**
+
 ```
 Found a solution!
 CPU time (s):    0.00
@@ -512,19 +725,11 @@ This demonstrates that **prioritized planning is incomplete and ordering-depende
 - **Different agent priority ordering**
 - **Different outcomes**: One ordering fails, the other succeeds with cost 309
 
-This earns the **bonus 0.5pt** for demonstrating ordering-dependent incompleteness.
-
-✅ **BONUS COMPLETED**
-
-✅ **PASS**
-
 ---
 
 ## Task 3: Implementing Conflict-Based Search (CBS)
 
-**Total Points:** 5/5
-
-### Task 3.1: Detecting Collisions (1pt)
+### Task 3.1: Detecting Collisions 
 
 #### Implementation Decision
 Implemented two-phase collision detection: pairwise collision detection and global collision collection.
@@ -556,7 +761,7 @@ def detect_collision(path1, path2):
 **Rationale:**
 - Use `get_location()` helper to handle agents staying at goal
 - Check all timesteps up to maximum path length
-- Return **first** collision found (earliest in time)
+- Return first collision found (earliest in time)
 - Single location in `'loc'` indicates vertex collision
 - Two locations indicate edge collision
 
@@ -585,16 +790,15 @@ def detect_collisions(paths):
 - Occurs at timestep 3
 - Between agents 0 and 1
 
-✅ **PASS**
-
 ---
 
-### Task 3.2: Converting Collisions to Constraints (1pt)
+### Task 3.2: Converting Collisions to Constraints
 
 #### Implementation Decision
 Implement standard splitting that converts one collision into two constraints (one per agent).
 
 **Code (cbs.py, lines 56-95):**
+
 ```python
 def standard_splitting(collision):
     """Convert a collision into two constraints"""
@@ -645,11 +849,9 @@ def standard_splitting(collision):
  {'agent': 1, 'loc': [(1, 4)], 'timestep': 3}]
 ```
 
-✅ **PASS**
-
 ---
 
-### Task 3.3: Implementing the High-Level Search (2.5pt)
+### Task 3.3: Implementing the High-Level Search
 
 #### Implementation Decision
 Implement CBS high-level search using priority queue ordered by solution cost.
@@ -727,15 +929,61 @@ node = {
 
 **Test Output (exp0.txt):**
 ```
-Expanded nodes: 9
-Generated nodes: 17
-Sum of costs: 8
+Generate node 0
+Expand node 0    ← Root with 1 collision
+Generate node 1  ← Child 1 (constrain agent 0)
+Generate node 2  ← Child 2 (constrain agent 1)
+Expand node 1
+Generate node 3
+Generate node 4
+Expand node 2
+Generate node 5
+Generate node 6
+Expand node 3
+Generate node 7
+Generate node 8
+Expand node 6
+Generate node 9
+Generate node 10
+Expand node 10
+Generate node 11
+Generate node 12
+Expand node 12
+Generate node 13
+Generate node 14
+Expand node 14
+Generate node 15
+Generate node 16
+Expand node 16
 
-Agent 0: [(1,1), (1,2), (1,3), (1,4), (1,5)]
-Agent 1: [(1,2), (1,3), (2,3), (1,3), (1,4)]
+ Found a solution!
+
+CPU time (s):    0.00
+Sum of costs:    8
+Expanded nodes:  9
+Generated nodes: 17
 ```
 
-✅ **PASS**
+**Analysis:**
+
+- CBS expanded 9 nodes before finding solution
+- Generated 17 nodes total (including pruned)
+- Sum of costs: 8 (optimal)
+- Found solution with no collisions
+
+##### Solution Paths
+
+**Agent 0:** `[(1,1), (1,2), (1,3), (1,4), (1,5)]` **Agent 1:** `[(1,2), (1,3), (2,3), (1,3), (1,4)]`
+
+**Verification:**
+
+- t=0: Agent0@(1,1), Agent1@(1,2) ✓
+- t=1: Agent0@(1,2), Agent1@(1,3) ✓
+- t=2: Agent0@(1,3), Agent1@(2,3) ✓ (Agent1 detours)
+- t=3: Agent0@(1,4), Agent1@(1,3) ✓
+- t=4: Agent0@(1,5), Agent1@(1,4) ✓
+
+No collisions!
 
 ---
 
@@ -754,7 +1002,7 @@ python run_experiments.py --instance "instances/test_*.txt" --solver CBS --batch
 diff instances/min-sum-of-cost.csv results.csv
 ```
 
-**Result:** **PERFECT MATCH** - 0 differences!
+**Result:**  0 differences!
 
 **Sample Results:**
 
@@ -771,13 +1019,9 @@ diff instances/min-sum-of-cost.csv results.csv
 - Success rate: **100%**
 - Optimality rate: **100%**
 
-✅ **PASS**
-
 ---
 
 ## Task 4: CBS with Disjoint Splitting
-
-**Total Points:** 5/5
 
 ### Implementation Decision
 Extended CBS with disjoint splitting using positive constraints to reduce the search tree size while maintaining completeness and optimality.
@@ -885,20 +1129,16 @@ python3 run_experiments.py --instance instances/exp4.txt --solver CBS --disjoint
 - Sum of costs: **11** (optimal)
 - **Node reduction: ~18%**
 
-#### Comprehensive Testing
+#### Testing
 ```bash
 python3 run_experiments.py --instance "instances/test_*" --solver CBS --batch --disjoint
 ```
 
 **Result:** All 50/50 instances match optimal costs exactly
 
-✅ **PASS**
-
 ---
 
-## Task 5: Benchmarking MAPF Solvers (Bonus)
-
-**Total Points:** +0.5/20
+## Task 5: Benchmarking MAPF Solvers
 
 ### Overview
 Conducted comprehensive benchmarking study comparing Independent, Prioritized, and CBS solvers on diverse MAPF instances.
@@ -1009,22 +1249,3 @@ All three solvers: **100% (6/6 instances)**
 | Large-scale (20+ agents) | Independent/Prioritized | CBS impractical |
 | Small (< 10 agents) | CBS | Optimality achievable |
 
-✅ **BONUS ACHIEVED**
-
----
-
-## References
-
-1. Sharon, G., Stern, R., Felner, A., & Sturtevant, N. R. (2015). "Conflict-based search for optimal multi-agent pathfinding." *Artificial Intelligence*, 219, 40-66.
-
-2. Silver, D. (2005). "Cooperative pathfinding." *AIIDE*, 1, 117-122.
-
-3. Stern, R., et al. (2019). "Multi-Agent Pathfinding: Definitions, Variants, and Benchmarks." *SoCS*.
-
-4. Li, J., et al. (2021). "Disjoint Splitting for Multi-Agent Path Finding with Conflict-Based Search." *ICAPS*, 31, 279-283.
-
-5. MovingAI Benchmarks: https://movingai.com/benchmarks/mapf.html
-
----
-
-**End of Report**
