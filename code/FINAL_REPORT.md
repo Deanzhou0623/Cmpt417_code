@@ -944,56 +944,6 @@ All three solvers: **100% (6/6 instances)**
 
 ---
 
-## Custom Test Instances
-
-### custominstances/task2_5a.txt
-
-**Purpose:** Demonstrate prioritized planning incompleteness
-
-**Map:**
-```
-3 3
-@ @ @ @ @
-@ . . . @
-@ @ @ @ @
-```
-
-**Agents:**
-```
-3
-1 1 1 3  # Agent 0: (1,1) → (1,3)
-1 2 1 2  # Agent 1: (1,2) → (1,2)
-1 3 1 1  # Agent 2: (1,3) → (1,1)
-```
-
-**Result:** "No solutions" for priority 0>1>2, but solutions exist for other orderings.
-
-### custominstances/task2_5b.txt
-
-**Purpose:** Exploratory rotation scenario
-
-**Map:**
-```
-4 4
-@ @ @ @
-@ . . @
-@ . . @
-@ @ @ @
-```
-
-**Agents:**
-```
-4
-1 1 2 2
-1 2 2 1
-2 1 1 2
-2 2 1 1
-```
-
-**Result:** Found solutions for all orderings tested.
-
----
-
 ## References
 
 1. Sharon, G., Stern, R., Felner, A., & Sturtevant, N. R. (2015). "Conflict-based search for optimal multi-agent pathfinding." *Artificial Intelligence*, 219, 40-66.
