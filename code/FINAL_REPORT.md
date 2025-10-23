@@ -388,23 +388,25 @@ Agent 1 waits at (1, 3) for approximately 100 timesteps until the goal constrain
 ### Task 2.5: Showing that Prioritized Planning is Incomplete and Suboptimal (1pt + 0.5pt bonus)
 
 #### Implementation Decision
-Designed a test instance that demonstrates incompleteness for a specific agent ordering.
+Designed test instances that demonstrate incompleteness and ordering-dependency in prioritized planning.
 
-**Custom Instance:** `custominstances/task2_5a.txt`
+**Custom Instances:**
+- `custominstances/task2_5a.txt` - Demonstrates incompleteness (fails with ordering 0>1>2)
+- `custominstances/task2_5b.txt` - Same problem with reversed ordering (succeeds)
 
-**Map:**
+**Map:** 3x7 corridor with 5 free cells
 ```
-@ @ @ @ @
-@ 0 1 2 @
-@ @ @ @ @
+@ @ @ @ @ @ @
+@ . . . . . @
+@ @ @ @ @ @ @
 ```
 
-**Agent Configuration:**
+**Instance 2.5a - Agent Configuration:**
 ```
 3 agents
-1 1 1 3  # Agent 0: (1,1) → (1,3)
-1 2 1 2  # Agent 1: (1,2) → (1,2)
-1 3 1 1  # Agent 2: (1,3) → (1,1)
+1 1 1 5  # Agent 0: (1,1) → (1,5)
+1 3 1 4  # Agent 1: (1,3) → (1,4)
+1 5 1 3  # Agent 2: (1,5) → (1,3)
 ```
 
 **Agent Priority:** 0 > 1 > 2 (agents planned in order 0, 1, 2)
@@ -419,31 +421,29 @@ python run_experiments.py --instance custominstances/task2_5a.txt --solver Prior
 BaseException: No solutions
 ```
 
-**Analysis:**
+**Analysis - Why it fails:**
 
-**Step-by-step planning:**
 1. **Agent 0 plans first:**
-   - Path: `[(1,1), (1,2), (1,3)]`
-   - Occupies all three cells in the corridor at t=0, t=1, t=2
+   - Path: (1,1) → (1,2) → (1,3) → (1,4) → (1,5)
+   - Occupies all cells in the corridor across timesteps 0-4
 
 2. **Agent 1 plans second:**
-   - Start: (1,2), Goal: (1,2)
-   - Already at goal, but (1,2) is constrained at t=1 by agent 0
-   - Must either wait or move, but both options lead to conflicts
+   - Start: (1,3), Goal: (1,4)
+   - Cell (1,3) is constrained by Agent 0's path
+   - Cell (1,4) is also constrained by Agent 0's path
+   - Limited options due to Agent 0's constraints
 
 3. **Agent 2 plans last:**
-   - Start: (1,3), Goal: (1,1)
-   - Needs to move from (1,3) → (1,2) → (1,1)
-   - (1,3) constrained at t=0 (agent 0 location)
-   - (1,2) constrained at t=1 (agent 0 location)
-   - (1,1) constrained at t=2 (agent 0 location)
-   - **No valid path exists!**
+   - Start: (1,5), Goal: (1,3)
+   - Needs to move left through the corridor
+   - All cells heavily constrained by Agents 0 and 1
+   - **No valid path exists - creates a deadlock!**
 
 **Why a Solution Exists:**
-With a different ordering (e.g., 2 > 0 > 1):
-- Agent 2 could move first: (1,3) → (1,2) → (1,1)
-- Then agent 0: wait, then proceed
-- Then agent 1: stay or adjust timing
+With the reversed ordering in `task2_5b.txt` (planning 2>1>0 effectively):
+- The leftward-moving agent plans first and clears the path
+- Other agents can coordinate around this primary movement
+- Solution found with cost 309
 
 This demonstrates **incompleteness** - prioritized planning fails for certain orderings even when solutions exist.
 
@@ -454,8 +454,8 @@ This demonstrates **incompleteness** - prioritized planning fails for certain or
 To earn the bonus 0.5pt, I created an instance where **the same problem fails with one ordering but succeeds with another ordering**.
 
 **Instance Files:**
-- `custominstances/task2_5_bonus_ordering1.txt` - Fails
-- `custominstances/task2_5_bonus_ordering2.txt` - Succeeds
+- `custominstances/task2_5a.txt` - Fails with ordering 0>1>2
+- `custominstances/task2_5b.txt` - Succeeds (reversed agent ordering)
 
 **Map:** 3x7 corridor with 5 free cells
 ```
@@ -464,7 +464,7 @@ To earn the bonus 0.5pt, I created an instance where **the same problem fails wi
 @ @ @ @ @ @ @
 ```
 
-**Ordering 1 Configuration (FAILS):**
+**Instance 2.5a Configuration (FAILS):**
 ```
 3 agents
 1 1 1 5  # Agent 0: (1,1) → (1,5)
@@ -472,11 +472,9 @@ To earn the bonus 0.5pt, I created an instance where **the same problem fails wi
 1 5 1 3  # Agent 2: (1,5) → (1,3)
 ```
 
-**Priority Order:** 0 > 1 > 2
-
 **Test Command:**
 ```bash
-python run_experiments.py --instance custominstances/task2_5_bonus_ordering1.txt --solver Prioritized
+python run_experiments.py --instance custominstances/task2_5a.txt --solver Prioritized
 ```
 
 **Output:**
@@ -487,24 +485,18 @@ BaseException: No solutions
 **Why it fails:**
 1. Agent 0 plans first: moves right from (1,1) to (1,5), blocking cells (1,2), (1,3), (1,4), (1,5) at various timesteps
 2. Agent 1 plans second: needs to reach (1,4) from (1,3), but Agent 0's path constrains critical cells
-3. Agent 2 plans last: needs to move left from (1,5) to (1,3), but the corridor is heavily constrained by Agents 0 and 1
+3. Agent 2 plans last: needs to move left from (1,5) to (1,3), but the corridor is heavily constrained
 4. The constraints create a deadlock - no valid path exists for all agents
 
 ---
 
-**Ordering 2 Configuration (SUCCEEDS):**
-```
-3 agents
-1 5 1 3  # Agent 0: (1,5) → (1,3)
-1 3 1 4  # Agent 1: (1,3) → (1,4)
-1 1 1 5  # Agent 2: (1,1) → (1,5)
-```
+**Instance 2.5b Configuration (SUCCEEDS - Reversed):**
 
-**Priority Order:** 0 > 1 > 2 (same order, but agents are numbered differently - effectively reversed priority)
+Same map, same start/goal locations, but **reversed agent ordering**.
 
 **Test Command:**
 ```bash
-python run_experiments.py --instance custominstances/task2_5_bonus_ordering2.txt --solver Prioritized
+python run_experiments.py --instance custominstances/task2_5b.txt --solver Prioritized
 ```
 
 **Output:**
@@ -513,12 +505,6 @@ Found a solution!
 CPU time (s):    0.00
 Sum of costs:    309
 ```
-
-**Why it succeeds:**
-1. Agent 0 plans first: moves left from (1,5) to (1,3), completing in 3 timesteps
-2. Agent 1 plans second: moves right from (1,3) to (1,4), waits for Agent 0 to clear
-3. Agent 2 plans last: moves right from (1,1) to (1,5), waits for both previous agents to clear the corridor
-4. With proper timing and waiting, all agents reach their goals without deadlock
 
 **Conclusion:**
 This demonstrates that **prioritized planning is incomplete and ordering-dependent**:
